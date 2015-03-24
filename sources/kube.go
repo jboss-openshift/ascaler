@@ -78,7 +78,7 @@ func (self *KubeSource) getPods(selector string) ([]Pod, error) {
 	return out, nil
 }
 
-func (self *KubeSource) CheckData() (error) {
+func (self *KubeSource) CheckData() error {
 	for _, selector := range self.selectors {
 
 		pods, err := self.getPods(selector)
@@ -111,7 +111,7 @@ func (self *KubeSource) CheckData() (error) {
 	return nil
 }
 
-func (self *KubeSource) SetReplicas(name string, replicas int) (error) {
+func (self *KubeSource) SetReplicas(name string, replicas int) error {
 	rc, err := self.client.ReplicationControllers(kube_api.NamespaceAll).Get(name)
 	if err != nil {
 		return err
@@ -127,7 +127,7 @@ func (self *KubeSource) SetReplicas(name string, replicas int) (error) {
 	return nil
 }
 
-func (self *KubeSource) GetData(selector string) (QueryEntry) {
+func (self *KubeSource) GetData(selector string) QueryEntry {
 	return self.data[selector]
 }
 

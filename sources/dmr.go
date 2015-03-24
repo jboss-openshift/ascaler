@@ -66,7 +66,7 @@ type RequestCountData struct {
 	Current int
 }
 
-func (self RequestCountData) Calculate(kube *KubeSource) error {
+func (self *RequestCountData) Calculate(kube *KubeSource) error {
 	previousRequestCount := self.Previous
 	currentRequestCount := self.Current
 
@@ -75,6 +75,7 @@ func (self RequestCountData) Calculate(kube *KubeSource) error {
 
 	self.Previous = currentRequestCount // update count
 	self.Timestamp = currentTime // update ts
+	self.Current = 0 // reset current count
 
 	timeDiff := (currentTime.Second() - previousTime.Second())
 
@@ -117,12 +118,13 @@ func (self *DmrContainer) CheckStats(kube *KubeSource) (error) {
 		return err
 	}
 
-	value := kube.GetData(*eapSelector)
-	if value != nil {
-		requestCountData, _ := value.(RequestCountData)
+	queryEntry := kube.GetData(*eapSelector)
+	if queryEntry != nil {
+		requestCountData, _ := queryEntry.(*RequestCountData)
 		requestCountData.Current += wr.RequestCount.Value
 	} else {
-		kube.PutData(*eapSelector, RequestCountData{Timestamp: time.Now(), Previous: 0, Current: wr.RequestCount.Value})
+		requestCountDataPtr := &RequestCountData{Timestamp: time.Now(), Previous: 0, Current: wr.RequestCount.Value}
+		kube.PutData(*eapSelector, requestCountDataPtr)
 	}
 
 	return nil
