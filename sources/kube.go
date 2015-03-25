@@ -30,7 +30,7 @@ func (self *KubeSource) parsePod(pod *kube_api.Pod) *Pod {
 		Hostname:   pod.Status.Host,
 		Status:     string(pod.Status.Phase),
 		Labels:     make(map[string]string, 0),
-		Containers: make([]*Container, 0),
+		Containers: make([]Container, 0),
 	}
 	for key, value := range pod.Labels {
 		localPod.Labels[key] = value
@@ -45,8 +45,7 @@ func (self *KubeSource) parsePod(pod *kube_api.Pod) *Pod {
 				localContainer.Name = container.Name
 				localContainer.Host = env.GetHost(pod, port)
 				localContainer.DmrPort = env.GetPort(pod, port)
-				ctr := Container(localContainer)
-				localPod.Containers = append(localPod.Containers, &ctr)
+				localPod.Containers = append(localPod.Containers, localContainer)
 				break
 			}
 		}
@@ -88,14 +87,12 @@ func (self *KubeSource) CheckData() error {
 
 		for _, pod := range pods {
 			for _, container := range pod.Containers {
-				ctn := *container
+				glog.Infof("Container --> %s", container.GetName())
 
-				glog.Infof("Container --> %s", ctn.GetName())
-
-				err := ctn.CheckStats(self)
+				err := container.CheckStats(self)
 
 				if err != nil {
-					glog.Errorf("Error checking container [%s] stats: %s", ctn.GetName(), err)
+					glog.Errorf("Error checking container [%s] stats: %s", container.GetName(), err)
 				}
 			}
 		}
