@@ -82,11 +82,14 @@ func (self *RequestCountData) Calculate(kube *KubeSource) error {
 	if (timeDiff > 0) {
 		replicas := (((currentRequestCount - previousRequestCount) / timeDiff) / *eapPodRate) + 1
 
-		glog.Infof("Current EAP replicas: %v", replicas)
+		glog.Infof("Current EAP replicas: %v [(%v - %v) / %v / %v]", replicas, currentRequestCount, previousRequestCount, timeDiff, *eapPodRate)
 
-		err := kube.SetReplicas(*eapReplicationController, replicas)
-		if err != nil {
-			return err
+		// skip if container was restarted
+		if replicas > 0 {
+			err := kube.SetReplicas(*eapReplicationController, replicas)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
