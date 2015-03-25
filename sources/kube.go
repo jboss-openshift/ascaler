@@ -111,6 +111,15 @@ func (self *KubeSource) CheckData() error {
 	return nil
 }
 
+func (self *KubeSource) GetReplicas(name string) (int, error) {
+	rc, err := self.client.ReplicationControllers(kube_api.NamespaceAll).Get(name)
+	if err != nil {
+		return 0, err
+	}
+
+	return rc.Spec.Replicas, nil;
+}
+
 func (self *KubeSource) SetReplicas(name string, replicas int) error {
 	rc, err := self.client.ReplicationControllers(kube_api.NamespaceAll).Get(name)
 	if err != nil {
