@@ -61,12 +61,21 @@ type WebResult struct {
 
 type RequestCountData struct {
 	Timestamp time.Time
-	Previous int
+	Previous int // previous request count
 
-	Current int
+	Current int // current request count
+	Size int // number of containers that added to request count
 }
 
 func (self *RequestCountData) Calculate(kube *KubeSource) error {
+	size := self.Size
+
+	if size == 0 {
+		// should probably not happen
+		glog.Warning("EAP size is zero!")
+		return nil
+	}
+
 	previousRequestCount := self.Previous
 	currentRequestCount := self.Current
 
@@ -76,15 +85,16 @@ func (self *RequestCountData) Calculate(kube *KubeSource) error {
 	self.Previous = currentRequestCount // update count
 	self.Timestamp = currentTime // update ts
 	self.Current = 0 // reset current count
+	self.Size = 0 // reset current size
 
 	timeDiff := (currentTime.Second() - previousTime.Second())
 
 	if (timeDiff > 0) {
-		replicas := (((currentRequestCount - previousRequestCount) / timeDiff) / *eapPodRate) + 1
+		replicas := (((currentRequestCount - previousRequestCount) / size / timeDiff) / *eapPodRate) + 1
 
-		glog.Infof("Current EAP replicas: %v [(%v - %v) / %v / %v]", replicas, currentRequestCount, previousRequestCount, timeDiff, *eapPodRate)
+		glog.Infof("Current EAP replicas: %v ... [(%v - %v) / %v / %v / %v]", replicas, currentRequestCount, previousRequestCount, size, timeDiff, *eapPodRate)
 
-		// skip if container was restarted
+		// skip first check on scale down -- it will be negative, as we "lose" some data
 		if replicas > 0 {
 			err := kube.SetReplicas(*eapReplicationController, replicas)
 			if err != nil {
@@ -122,8 +132,9 @@ func (self *DmrContainer) CheckStats(kube *KubeSource) (error) {
 	if queryEntry != nil {
 		requestCountData, _ := queryEntry.(*RequestCountData)
 		requestCountData.Current += wr.RequestCount.Value
+		requestCountData.Size++
 	} else {
-		requestCountDataPtr := &RequestCountData{Timestamp: time.Now(), Previous: 0, Current: wr.RequestCount.Value}
+		requestCountDataPtr := &RequestCountData{Timestamp: time.Now(), Previous: 0, Current: wr.RequestCount.Value, Size: 1}
 		kube.PutData(*eapSelector, requestCountDataPtr)
 	}
 
