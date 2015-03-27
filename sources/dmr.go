@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"bytes"
 	"time"
-	"github.com/golang/glog")
+	"github.com/golang/glog"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/types")
 
 type DmrContainer struct {
-	Name    string      `json:"name,omitempty"`
-	Host    string      `json:"host"`
-	DmrPort int         `json:"dmrPort"`
+	Pod		Pod
+	Name    string
+	Host    string
+	DmrPort int
 }
 
 type DmrAttributeRequest struct {
@@ -59,16 +61,21 @@ type WebResult struct {
 	VirtualServer		string				`json:"virtual-server"`
 }
 
-type RequestCountData struct {
-	Timestamp time.Time
-	Previous int // previous request count
+type InstanceData struct {
+	Timestamp int64 // previous timestamp
+	Previous int64 // previous request count
 
-	Current int // current request count
-	Size int // number of containers that added to request count
+	Current int64 // current request count
+}
+
+type RequestCountData struct {
+	pods map[types.UID]*InstanceData // 1pod --> 1eap container, no locking/synch atm
+	currentPods []types.UID
+	currentReplicas int // how many replicas we currently have
 }
 
 func (self *RequestCountData) Calculate(kube *KubeSource) error {
-	size := self.Size
+	size := len(self.pods)
 
 	if size == 0 {
 		// should probably not happen
@@ -76,32 +83,41 @@ func (self *RequestCountData) Calculate(kube *KubeSource) error {
 		return nil
 	}
 
-	previousRequestCount := self.Previous
-	currentRequestCount := self.Current
+	currentTime := time.Now().Unix()
 
-	previousTime := self.Timestamp
-	currentTime := time.Now()
+	// new map
+	currentPods := make(map[types.UID]*InstanceData)
 
-	self.Previous = currentRequestCount // update count
-	self.Timestamp = currentTime // update ts
-	self.Current = 0 // reset current count
-	self.Size = 0 // reset current size
+	sum := int64(0)
+	for _, uid := range self.currentPods {
+		data := self.pods[uid]
+		timeDiff := (currentTime - data.Timestamp)
+		if timeDiff > 0 {
+			podAvg := (data.Current - data.Previous) / timeDiff
+			sum += podAvg
+		}
+		data.Timestamp = currentTime
+		data.Previous = data.Current
+		data.Current = int64(0)
+		currentPods[uid] = data
+	}
+	replicas := int(sum / int64(*eapPodRate)) + 1
 
-	timeDiff := (currentTime.Second() - previousTime.Second())
+	// cleanup pods info
+	self.pods = currentPods // forget old pods/containers
+	self.currentPods = nil
 
-	if (timeDiff > 0) {
-		replicas := (((currentRequestCount - previousRequestCount) / size / timeDiff) / *eapPodRate) + 1
+	glog.Infof("Current EAP replicas: %v ... [%v / %v]", replicas, sum, *eapPodRate)
 
-		glog.Infof("Current EAP replicas: %v ... [(%v - %v) / %v / %v / %v]", replicas, currentRequestCount, previousRequestCount, size, timeDiff, *eapPodRate)
-
-		// skip first check on scale down -- it will be negative, as we "lose" some data
-		if replicas > 0 {
-			err := kube.SetReplicas(*eapReplicationController, replicas)
-			if err != nil {
-				return err
-			}
+	// only poke k8s if we have to change replicas size
+	if (replicas != self.currentReplicas) {
+		err := kube.SetReplicas(*eapReplicationController, replicas)
+		if err != nil {
+			return err
 		}
 	}
+
+	self.currentReplicas = replicas
 
 	return nil
 }
@@ -128,13 +144,28 @@ func (self *DmrContainer) CheckStats(kube *KubeSource) (error) {
 		return err
 	}
 
+	rcValue := int64(wr.RequestCount.Value)
+
 	queryEntry := kube.GetData(*eapSelector)
 	if queryEntry != nil {
-		requestCountData, _ := queryEntry.(*RequestCountData)
-		requestCountData.Current += wr.RequestCount.Value
-		requestCountData.Size++
+		requestCountData := queryEntry.(*RequestCountData)
+
+		requestCountData.currentPods = append(requestCountData.currentPods, self.Pod.ID)
+
+		data := requestCountData.pods[self.Pod.ID]
+		if data != nil {
+			data.Current += rcValue
+		} else {
+			// best guess, just set timestamp to "previous" poll
+			data = &InstanceData{Timestamp: time.Now().Unix() - int64(*kube.Poll_time), Current: rcValue}
+			requestCountData.pods[self.Pod.ID] = data
+		}
 	} else {
-		requestCountDataPtr := &RequestCountData{Timestamp: time.Now(), Previous: 0, Current: wr.RequestCount.Value, Size: 1}
+		data := &InstanceData{Timestamp: time.Now().Unix() - int64(*kube.Poll_time), Current: rcValue}
+		requestCountDataPtr := &RequestCountData{
+			pods: map[types.UID]*InstanceData{self.Pod.ID:data},
+			currentPods: []types.UID{self.Pod.ID},
+		}
 		kube.PutData(*eapSelector, requestCountDataPtr)
 	}
 

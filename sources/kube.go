@@ -12,9 +12,11 @@ import (
 	"net/http"
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil")
+	"io/ioutil"
+	"time")
 
 type KubeSource struct {
+	Poll_time	*time.Duration
 	client      *kube_client.Client
 	environment *Environment
 	selectors	[]string
@@ -42,6 +44,7 @@ func (self *KubeSource) parsePod(pod *kube_api.Pod) *Pod {
 		for _, port := range container.Ports {
 			if port.Name == "mgmt" || port.ContainerPort == 9990 {
 				localContainer := newDmrContainer()
+				localContainer.Pod = localPod
 				localContainer.Name = container.Name
 				localContainer.Host = env.GetHost(pod, port)
 				localContainer.DmrPort = env.GetPort(pod, port)
@@ -190,7 +193,7 @@ func newKubeClient(transport *http.Transport) *kube_client.Client {
 	}
 }
 
-func newKubeSource() (*KubeSource, error) {
+func newKubeSource(d *time.Duration) (*KubeSource, error) {
 	if !(strings.HasPrefix(*argMaster, "http://") || strings.HasPrefix(*argMaster, "https://")) {
 		*argMaster = "http://" + *argMaster
 	}
@@ -206,6 +209,7 @@ func newKubeSource() (*KubeSource, error) {
 	kubeClient := newKubeClient(transport)
 
 	return &KubeSource{
+		Poll_time:		d,
 		client:      	kubeClient,
 		environment: 	newEnvironment(),
 		selectors:		[]string{*eapSelector},

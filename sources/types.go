@@ -6,7 +6,8 @@ import (
 	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
 	"encoding/json"
-	"strconv")
+	"strconv"
+	"time")
 
 var (
 	argMaster         = flag.String("kubernetes_master", "https://localhost:8443", "Kubernetes master address")
@@ -51,8 +52,8 @@ type Source interface {
 	CheckData() (error)
 }
 
-func NewSource() (Source, error) {
-	return newKubeSource()
+func NewSource(d *time.Duration) (Source, error) {
+	return newKubeSource(d)
 }
 
 type Environment interface {

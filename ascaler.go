@@ -16,6 +16,7 @@ func main() {
 	flag.Parse()
 	glog.Infof(strings.Join(os.Args, " "))
 	glog.Infof("AScaler version %v", ascalerVersion)
+
 	err := doWork()
 	if err != nil {
 		glog.Error(err)
@@ -25,7 +26,7 @@ func main() {
 }
 
 func doWork() error {
-	source, err := sources.NewSource()
+	source, err := sources.NewSource(argPollDuration)
 	if err != nil {
 		return err
 	}
