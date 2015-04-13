@@ -2,22 +2,16 @@ package sources
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	kube_client "github.com/GoogleCloudPlatform/kubernetes/pkg/client"
 	kube_labels "github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"github.com/golang/glog"
-	"net/http"
-	"crypto/tls"
-	"crypto/x509"
-	"io/ioutil"
 	"time")
 
 type KubeSource struct {
 	Poll_time	*time.Duration
-	client      *kube_client.Client
+	client      *KubeClient
 	environment *Environment
 	selectors	[]string
 	data		map[string]QueryEntry
@@ -102,37 +96,12 @@ func (self *KubeSource) CheckData() error {
 
 		entry := self.GetData(selector)
 		if entry != nil {
-			err = entry.Calculate(self)
+			err = entry.Calculate(self.client)
 			if err != nil {
 				return err
 			}
 		}
 	}
-	return nil
-}
-
-func (self *KubeSource) GetReplicas(name string) (int, error) {
-	rc, err := self.client.ReplicationControllers(kube_api.NamespaceAll).Get(name)
-	if err != nil {
-		return 0, err
-	}
-
-	return rc.Spec.Replicas, nil;
-}
-
-func (self *KubeSource) SetReplicas(name string, replicas int) error {
-	rc, err := self.client.ReplicationControllers(kube_api.NamespaceAll).Get(name)
-	if err != nil {
-		return err
-	}
-
-	rc.Spec.Replicas = replicas
-
-	_, err = self.client.ReplicationControllers(kube_api.NamespaceAll).Update(rc)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -142,55 +111,6 @@ func (self *KubeSource) GetData(selector string) QueryEntry {
 
 func (self *KubeSource) PutData(selector string, value QueryEntry) {
 	self.data[selector] = value
-}
-
-func createTransport() (*http.Transport, error) {
-	// run as insecure
-	if *argMasterInsecure {
-		return nil, nil
-	}
-
-	// Load client cert
-	cert, err := tls.LoadX509KeyPair(*certFile, *keyFile)
-	if err != nil {
-		return nil, err
-	}
-
-	// Load CA cert
-	caCert, err := ioutil.ReadFile(*caFile)
-	if err != nil {
-		return nil, err
-	}
-
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-
-	// Setup HTTPS client
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      caCertPool,
-	}
-	tlsConfig.BuildNameToCertificate()
-
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-
-	return transport, nil
-}
-
-func newKubeClient(transport *http.Transport) *kube_client.Client {
-	if transport != nil {
-		return kube_client.NewOrDie(&kube_client.Config{
-			Host:     os.ExpandEnv(*argMaster),
-			Version:  *argMasterVersion,
-			Transport: transport,
-		})
-	} else {
-		return kube_client.NewOrDie(&kube_client.Config{
-			Host:     os.ExpandEnv(*argMaster),
-			Version:  *argMasterVersion,
-			Insecure: *argMasterInsecure,
-		})
-	}
 }
 
 func newKubeSource(d *time.Duration) (*KubeSource, error) {

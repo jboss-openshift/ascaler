@@ -74,7 +74,7 @@ type RequestCountData struct {
 	currentReplicas int // how many replicas we currently have
 }
 
-func (self *RequestCountData) Calculate(kube *KubeSource) error {
+func (self *RequestCountData) Calculate(client *KubeClient) error {
 	size := len(self.pods)
 
 	if size == 0 {
@@ -111,7 +111,7 @@ func (self *RequestCountData) Calculate(kube *KubeSource) error {
 
 	// only poke k8s if we have to change replicas size
 	if (replicas != self.currentReplicas) {
-		err := kube.SetReplicas(*eapReplicationController, replicas)
+		err := client.SetReplicas(*eapReplicationController, replicas)
 		if err != nil {
 			return err
 		}

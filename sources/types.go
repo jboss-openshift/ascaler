@@ -41,7 +41,7 @@ type Container interface {
 }
 
 type QueryEntry interface {
-	Calculate(kube *KubeSource) error
+	Calculate(client *KubeClient) error
 }
 
 func newDmrContainer() *DmrContainer {
