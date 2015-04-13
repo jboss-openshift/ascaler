@@ -7,7 +7,8 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
 	"encoding/json"
 	"strconv"
-	"time")
+	"time"
+	"fmt")
 
 var (
 	argMaster         = flag.String("kubernetes_master", "https://localhost:8443", "Kubernetes master address")
@@ -18,9 +19,12 @@ var (
 	keyFile  = flag.String("key", "/opt/openshift/origin/openshift.local.certificates/admin/key.key", "A PEM encoded private key file.")
 	caFile   = flag.String("CA", "/opt/openshift/origin/openshift.local.certificates/master/root.crt", "A PEM encoded CA's certificate file.")
 
+	sourceType = flag.String("source", "k8s", "Source of metrics - direct EAP containers or influxdb")
+
 	eapSelector = flag.String("eap_selector", "name=eapPod", "EAP pod selector")
 	eapReplicationController = flag.String("eap_replication_controller", "eaprc", "EAP replication controller")
 	eapPodRate = flag.Int("eap_pod_rate", 1000, "EAP pod rate") // allowed requests per second
+	maxEapPods = flag.Int("max_eap_pods", 20, "Max EAP pod instances") // max EAP pod instances // TODO: set the right number
 )
 
 // PodState is the state of a pod, used as either input (desired state) or output (current state)
@@ -53,7 +57,13 @@ type Source interface {
 }
 
 func NewSource(d *time.Duration) (Source, error) {
-	return newKubeSource(d)
+	if *sourceType == "k8s" {
+		return NewKubeSource(d)
+	} else if (*sourceType == "influxdb") {
+		return NewInfluxdbSource(d)
+	} else {
+		return nil, fmt.Errorf("No such source type: %s", *sourceType)
+	}
 }
 
 type Environment interface {

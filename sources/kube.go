@@ -113,7 +113,7 @@ func (self *KubeSource) PutData(selector string, value QueryEntry) {
 	self.data[selector] = value
 }
 
-func newKubeSource(d *time.Duration) (*KubeSource, error) {
+func NewKubeSource(d *time.Duration) (*KubeSource, error) {
 	if !(strings.HasPrefix(*argMaster, "http://") || strings.HasPrefix(*argMaster, "https://")) {
 		*argMaster = "http://" + *argMaster
 	}
