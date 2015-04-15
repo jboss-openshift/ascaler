@@ -13,10 +13,10 @@ type SimpleEapMetric struct {
 	currentReplicas int
 }
 
-func (self *InfluxdbSource) query(k int) ([]*influxdb.Series, error) {
-	pt := int(self.Poll_time.Seconds())
+func query(source *InfluxdbSource, k int) ([]*influxdb.Series, error) {
+	pt := int(source.Poll_time.Seconds())
 	query := fmt.Sprintf("SELECT %s FROM %s WHERE time > now() - %ds AND time < now() - %ds", "request_count", *argDbTable, pt * (k + 1), pt * k)
-	series, err := self.client.Query(query, influxdb.Second)
+	series, err := source.client.Query(query, influxdb.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (self *SimpleEapMetric) Execute(source *InfluxdbSource) (error) {
 
 	// current data
 
-	newS, err := source.query(0)
+	newS, err := query(source, 0)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func (self *SimpleEapMetric) Execute(source *InfluxdbSource) (error) {
 
 	// previous data
 
-	oldS, err := source.query(1)
+	oldS, err := query(source, 1)
 	if err != nil {
 		return err
 	}
