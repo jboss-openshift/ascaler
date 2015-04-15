@@ -3,19 +3,19 @@ import (
 	influxdb "github.com/influxdb/influxdb/client"
 	"flag"
 	"github.com/golang/glog"
-	"fmt")
+	"fmt"
+	"strings")
 
 var (
-	argDbTable = flag.String("eap_influxdb_table", "/^default\\.eap-controller-.*\\.eap-container\\.dmr/i", "Influxdb table name")
+	// simple eap
+	argEapDbTable = flag.String("eap_influxdb_table", "/^default\\.eap-controller-.*\\.eap-container\\.dmr/i", "Influxdb table name")
+	simple_eap_columns = []string{"request_count"}
 )
 
-type SimpleEapMetric struct {
-	currentReplicas int
-}
-
-func query(source *InfluxdbSource, k int) ([]*influxdb.Series, error) {
+func query(source *InfluxdbSource, columns []string, table string, k int) ([]*influxdb.Series, error) {
 	pt := int(source.Poll_time.Seconds())
-	query := fmt.Sprintf("SELECT %s FROM %s WHERE time > now() - %ds AND time < now() - %ds", "request_count", *argDbTable, pt * (k + 1), pt * k)
+	select_columns := strings.Join(columns, ",")
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE time > now() - %ds AND time < now() - %ds", select_columns, table, pt * (k + 1), pt * k)
 	series, err := source.client.Query(query, influxdb.Second)
 	if err != nil {
 		return nil, err
@@ -41,12 +41,16 @@ func toMap(series []*influxdb.Series) (map[string]int64, error) {
 	return sm, nil
 }
 
+type SimpleEapMetric struct {
+	currentReplicas int
+}
+
 func (self *SimpleEapMetric) Execute(source *InfluxdbSource) (error) {
 	glog.Infof("Querying InfluxDB data for EAP requests ...")
 
 	// current data
 
-	newS, err := query(source, 0)
+	newS, err := query(source, simple_eap_columns, *argEapDbTable, 0)
 	if err != nil {
 		return err
 	}
@@ -59,7 +63,7 @@ func (self *SimpleEapMetric) Execute(source *InfluxdbSource) (error) {
 
 	// previous data
 
-	oldS, err := query(source, 1)
+	oldS, err := query(source, simple_eap_columns, *argEapDbTable, 1)
 	if err != nil {
 		return err
 	}
