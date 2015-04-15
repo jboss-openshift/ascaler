@@ -13,7 +13,6 @@ var (
 	argDbPassword = flag.String("influxdb_password", "root", "InfluxDB password")
 	argDbHost = flag.String("influxdb_host", "localhost:8086", "InfluxDB host:port")
 	argDbName = flag.String("influxdb_name", "k8s", "Influxdb database name")
-	argDbTable = flag.String("influxdb_table", "/^default\\.eap-controller-.*\\.eap-container\\.dmr/i", "Influxdb table name")
 )
 
 type InfluxdbSource struct {
@@ -22,6 +21,11 @@ type InfluxdbSource struct {
 	dbName         string
 	lastWrite      time.Time
 	kubeClient     *KubeClient
+	metrics		   []Metric
+}
+
+type Metric interface {
+	Execute(source *InfluxdbSource) (error)
 }
 
 func toInt64(n interface{}) (int64, error) {
@@ -29,17 +33,6 @@ func toInt64(n interface{}) (int64, error) {
 		return int64(f), nil
 	}
 	return 0, fmt.Errorf("Cannot convert %s to int64, expecting float64", n)
-}
-
-func (self *InfluxdbSource) query(k int) ([]*influxdb.Series, error) {
-	pt := int(self.Poll_time.Seconds())
-	query := fmt.Sprintf("SELECT %s FROM %s WHERE time > now() - %ds AND time < now() - %ds", "request_count", *argDbTable, pt * (k + 1), pt * k)
-	series, err := self.client.Query(query, influxdb.Second)
-	if err != nil {
-		return nil, err
-	}
-
-	return series, nil
 }
 
 func toValue(points [][]interface{}) interface{} {
@@ -50,85 +43,20 @@ func max64(x,y int64) int64 {
 	return int64(math.Max(float64(x), float64(y)))
 }
 
-func toMap(series []*influxdb.Series) (map[string]int64, error) {
-	sm := make(map[string]int64)
-
-	for _, s := range series {
-		value, err := toInt64(toValue(s.Points))
-		if err != nil {
-			return nil, err
-		}
-		if previous, found := sm[s.GetName()]; found {
-			value = max64(previous, value)
-		}
-		sm[s.GetName()] = value
-	}
-
-	return sm, nil
-}
-
 func (self *InfluxdbSource) CheckData() (error) {
-	err := self.doCheckData()
-	if err != nil {
-		glog.Errorf("Error checking data: %s", err)
+	for _, metric := range self.metrics {
+		err := metric.Execute(self)
+		if err != nil {
+			glog.Errorf("Error checking data for metric %s -> %s", metric, err)
+		}
 	}
 	return nil
 }
 
-func (self *InfluxdbSource) doCheckData() (error) {
-	glog.Infof("Querying InfluxDB data ...")
-
-	// current data
-
-	newS, err := self.query(0)
-	if err != nil {
-		return err
-	}
-
-	n := int64(len(newS))
-
-	if n == 0 {
-		return nil
-	}
-
-	// previous data
-
-	oldS, err := self.query(1)
-	if err != nil {
-		return err
-	}
-
-	oldMap, err := toMap(oldS)
-	if err != nil {
-		return err
-	}
-
-	sum := int64(0)
-	for _, s := range newS {
-		previous := oldMap[s.GetName()]
-		value, err := toInt64(toValue(s.Points))
-		if err != nil {
-			return err
-		}
-
-		diff := value - previous // new requests
-		sum += (diff / int64(self.Poll_time.Seconds())) // average req / sec
-	}
-
-	replicas := int((sum / n) / int64(*eapPodRate)) + 1
-	// limit replicas
-	if replicas > *maxEapPods {
-		replicas = *maxEapPods
-	}
-
-	if replicas > 0 {
-		err := self.kubeClient.SetReplicas(*eapReplicationController, replicas)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+// TODO make this more generic
+func getMetrics() []Metric {
+	ms := make([]Metric, 0)
+	return append(ms, &SimpleEapMetric{})
 }
 
 func NewInfluxdbSource(duration *time.Duration) (Source, error) {
@@ -161,6 +89,7 @@ func NewInfluxdbSource(duration *time.Duration) (Source, error) {
 		client:         client,
 		dbName:         *argDbName,
 		lastWrite:      time.Now(),
-		kubeClient:        newKubeClient(transport),
+		kubeClient:     newKubeClient(transport),
+		metrics:		getMetrics(),
 	}, nil
 }
