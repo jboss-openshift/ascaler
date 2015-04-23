@@ -3,10 +3,10 @@ package sources
 import (
 	"flag"
 	"fmt"
-	"github.com/golang/glog"
-	influxdb "github.com/influxdb/influxdb/client"
 	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	kube_labels "github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	"github.com/golang/glog"
+	influxdb "github.com/influxdb/influxdb/client"
 	"strings"
 )
 
@@ -47,7 +47,7 @@ func toMap(series []*influxdb.Series) (map[string]int64, error) {
 
 type SimpleEapMetric struct {
 	currentReplicas int
-	selector kube_labels.Selector
+	selector        kube_labels.Selector
 }
 
 func NewSimpleEapMetric() *SimpleEapMetric {
@@ -100,31 +100,20 @@ func (self *SimpleEapMetric) Execute(source *InfluxdbSource) error {
 		replicas = *maxEapPods
 	}
 
-	if (replicas <= 0) {
-		return nil
-	}
-
-	if replicas > self.currentReplicas {
-		glog.Infof("Scaling up: %v [%v]", replicas, self.currentReplicas)
-
-		err := source.kubeClient.SetReplicas(*eapReplicationController, replicas)
-		if err != nil {
-			return err
-		}
-	}
-
-	if replicas < self.currentReplicas {
-		glog.Infof("Scaling down: %v [%v]", replicas, self.currentReplicas)
-
-		err := inspect(source.kubeClient, self, self.currentReplicas, replicas)
-		if err != nil {
-			return err
-		}
+	err = Scale(source.kubeClient, self, self.currentReplicas, replicas)
+	if err != nil {
+		return err
 	}
 
 	self.currentReplicas = replicas
 
 	return nil
+}
+
+// Inspector
+
+func (self *SimpleEapMetric) GetReplicationController() string {
+	return *eapReplicationController
 }
 
 func (self *SimpleEapMetric) GetSelector() kube_labels.Selector {
