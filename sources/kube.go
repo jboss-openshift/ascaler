@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	kube_labels "github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"github.com/golang/glog"
 	"time"
 )
@@ -54,10 +53,7 @@ func (self *KubeSource) parsePod(pod *kube_api.Pod) *Pod {
 }
 
 func (self *KubeSource) getPods(selector string) ([]Pod, error) {
-	sc, err := kube_labels.ParseSelector(selector)
-	if err != nil {
-		return nil, err
-	}
+	sc := ParseSelector(selector)
 
 	pods, err := self.client.Pods(kube_api.NamespaceAll).List(sc)
 	if err != nil {

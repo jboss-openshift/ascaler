@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	kube_client "github.com/GoogleCloudPlatform/kubernetes/pkg/client"
+	kube_labels "github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -12,6 +13,14 @@ import (
 
 type KubeClient struct {
 	client *kube_client.Client
+}
+
+func ParseSelector(selector string) kube_labels.Selector {
+	sc, err := kube_labels.ParseSelector(selector)
+	if err != nil {
+		panic(err)
+	}
+	return sc
 }
 
 func (self *KubeClient) Pods(namespace string) kube_client.PodInterface {
@@ -40,6 +49,38 @@ func (self *KubeClient) SetReplicas(name string, replicas int) error {
 		return err
 	}
 
+	return nil
+}
+
+func (self *KubeClient) updatePod(pod *kube_api.Pod) error {
+	_, err := self.client.Pods(kube_api.NamespaceAll).Update(pod)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (self *KubeClient) SuspendPod(inspector Inspector, pod *kube_api.Pod) error {
+	err := inspector.SuspendPod(pod)
+	if err != nil {
+		return err
+	}
+
+	return self.updatePod(pod)
+}
+
+func (self *KubeClient) ResumePod(inspector Inspector, pod *kube_api.Pod) error {
+	err := inspector.ResumePod(pod)
+	if err != nil {
+		return err
+	}
+
+	return self.updatePod(pod)
+}
+
+func (self *KubeClient) ScaleDown(pod *kube_api.Pod) error {
+	// TODO
 	return nil
 }
 

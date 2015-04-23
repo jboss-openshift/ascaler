@@ -58,7 +58,11 @@ func (self *InfluxdbSource) CheckData() error {
 // TODO make this more generic
 func getMetrics() []Metric {
 	ms := make([]Metric, 0)
-	return append(ms, &SimpleEapMetric{})
+
+	eap := NewSimpleEapMetric()
+	ms = append(ms, eap)
+
+	return ms
 }
 
 func NewInfluxdbSource(duration *time.Duration) (Source, error) {

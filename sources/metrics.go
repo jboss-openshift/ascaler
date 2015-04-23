@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	influxdb "github.com/influxdb/influxdb/client"
+	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	kube_labels "github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"strings"
 )
 
@@ -45,6 +47,11 @@ func toMap(series []*influxdb.Series) (map[string]int64, error) {
 
 type SimpleEapMetric struct {
 	currentReplicas int
+	selector kube_labels.Selector
+}
+
+func NewSimpleEapMetric() *SimpleEapMetric {
+	return &SimpleEapMetric{selector: ParseSelector(*eapSelector)}
 }
 
 func (self *SimpleEapMetric) Execute(source *InfluxdbSource) error {
@@ -93,16 +100,48 @@ func (self *SimpleEapMetric) Execute(source *InfluxdbSource) error {
 		replicas = *maxEapPods
 	}
 
-	if replicas > 0 && self.currentReplicas != replicas {
-		glog.Infof("Applying replicas: %v", replicas)
+	if (replicas <= 0) {
+		return nil
+	}
+
+	if replicas > self.currentReplicas {
+		glog.Infof("Scaling up: %v [%v]", replicas, self.currentReplicas)
 
 		err := source.kubeClient.SetReplicas(*eapReplicationController, replicas)
 		if err != nil {
 			return err
 		}
-
-		self.currentReplicas = replicas
 	}
 
+	if replicas < self.currentReplicas {
+		glog.Infof("Scaling down: %v [%v]", replicas, self.currentReplicas)
+
+		err := inspect(source.kubeClient, self, self.currentReplicas, replicas)
+		if err != nil {
+			return err
+		}
+	}
+
+	self.currentReplicas = replicas
+
+	return nil
+}
+
+func (self *SimpleEapMetric) GetSelector() kube_labels.Selector {
+	return self.selector
+}
+
+func (self *SimpleEapMetric) CanScaleDown(pod *kube_api.Pod) bool {
+	// TODO
+	return true
+}
+
+func (self *SimpleEapMetric) SuspendPod(pod *kube_api.Pod) error {
+	pod.Labels["state"] = "Suspended"
+	return nil
+}
+
+func (self *SimpleEapMetric) ResumePod(pod *kube_api.Pod) error {
+	pod.Labels["state"] = "Running"
 	return nil
 }
