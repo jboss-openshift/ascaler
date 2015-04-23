@@ -1,21 +1,23 @@
 package sources
+
 import (
-	influxdb "github.com/influxdb/influxdb/client"
 	"flag"
-	"github.com/golang/glog"
 	"fmt"
-	"strings")
+	"github.com/golang/glog"
+	influxdb "github.com/influxdb/influxdb/client"
+	"strings"
+)
 
 var (
 	// simple eap
-	argEapDbTable = flag.String("eap_influxdb_table", "/^default\\.eap-controller-.*\\.eap-container\\.dmr/i", "Influxdb table name")
+	argEapDbTable      = flag.String("eap_influxdb_table", "/^default\\.eap-controller-.*\\.eap-container\\.dmr/i", "Influxdb table name")
 	simple_eap_columns = []string{"request_count"}
 )
 
 func query(source *InfluxdbSource, columns []string, table string, k int) ([]*influxdb.Series, error) {
 	pt := int(source.Poll_time.Seconds())
 	select_columns := strings.Join(columns, ",")
-	query := fmt.Sprintf("SELECT %s FROM %s WHERE time > now() - %ds AND time < now() - %ds", select_columns, table, pt * (k + 1), pt * k)
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE time > now() - %ds AND time < now() - %ds", select_columns, table, pt*(k+1), pt*k)
 	series, err := source.client.Query(query, influxdb.Second)
 	if err != nil {
 		return nil, err
@@ -45,7 +47,7 @@ type SimpleEapMetric struct {
 	currentReplicas int
 }
 
-func (self *SimpleEapMetric) Execute(source *InfluxdbSource) (error) {
+func (self *SimpleEapMetric) Execute(source *InfluxdbSource) error {
 	glog.Infof("Querying InfluxDB data for EAP requests ...")
 
 	// current data
@@ -81,11 +83,11 @@ func (self *SimpleEapMetric) Execute(source *InfluxdbSource) (error) {
 			return err
 		}
 
-		diff := value - previous // new requests
+		diff := value - previous                          // new requests
 		sum += (diff / int64(source.Poll_time.Seconds())) // average req / sec
 	}
 
-	replicas := int((sum / n) / int64(*eapPodRate)) + 1
+	replicas := int((sum/n)/int64(*eapPodRate)) + 1
 	// limit replicas
 	if replicas > *maxEapPods {
 		replicas = *maxEapPods

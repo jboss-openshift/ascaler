@@ -7,14 +7,15 @@ import (
 	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	kube_labels "github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"github.com/golang/glog"
-	"time")
+	"time"
+)
 
 type KubeSource struct {
-	Poll_time	*time.Duration
+	Poll_time   *time.Duration
 	client      *KubeClient
 	environment *Environment
-	selectors	[]string
-	data		map[string]QueryEntry
+	selectors   []string
+	data        map[string]QueryEntry
 }
 
 func (self *KubeSource) parsePod(pod *kube_api.Pod) *Pod {
@@ -129,10 +130,10 @@ func NewKubeSource(d *time.Duration) (*KubeSource, error) {
 	kubeClient := newKubeClient(transport)
 
 	return &KubeSource{
-		Poll_time:		d,
-		client:      	kubeClient,
-		environment: 	newEnvironment(),
-		selectors:		[]string{*eapSelector},
-		data:		 	make(map[string]QueryEntry),
+		Poll_time:   d,
+		client:      kubeClient,
+		environment: newEnvironment(),
+		selectors:   []string{*eapSelector},
+		data:        make(map[string]QueryEntry),
 	}, nil
 }

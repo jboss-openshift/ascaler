@@ -1,16 +1,17 @@
 package sources
 
 import (
-	"os"
-	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	kube_client "github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"net/http"
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil")
+	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	kube_client "github.com/GoogleCloudPlatform/kubernetes/pkg/client"
+	"io/ioutil"
+	"net/http"
+	"os"
+)
 
 type KubeClient struct {
-	client      *kube_client.Client
+	client *kube_client.Client
 }
 
 func (self *KubeClient) Pods(namespace string) kube_client.PodInterface {
@@ -23,7 +24,7 @@ func (self *KubeClient) GetReplicas(name string) (int, error) {
 		return 0, err
 	}
 
-	return rc.Spec.Replicas, nil;
+	return rc.Spec.Replicas, nil
 }
 
 func (self *KubeClient) SetReplicas(name string, replicas int) error {
@@ -78,8 +79,8 @@ func createTransport() (*http.Transport, error) {
 func createClient(transport *http.Transport) *kube_client.Client {
 	if transport != nil {
 		return kube_client.NewOrDie(&kube_client.Config{
-			Host:     os.ExpandEnv(*argMaster),
-			Version:  *argMasterVersion,
+			Host:      os.ExpandEnv(*argMaster),
+			Version:   *argMasterVersion,
 			Transport: transport,
 		})
 	} else {

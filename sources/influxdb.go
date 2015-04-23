@@ -1,31 +1,33 @@
 package sources
+
 import (
-	"time"
-	influxdb "github.com/influxdb/influxdb/client"
 	"flag"
-	"github.com/golang/glog"
-	"os"
 	"fmt"
-	"math")
+	"github.com/golang/glog"
+	influxdb "github.com/influxdb/influxdb/client"
+	"math"
+	"os"
+	"time"
+)
 
 var (
 	argDbUsername = flag.String("influxdb_username", "root", "InfluxDB username")
 	argDbPassword = flag.String("influxdb_password", "root", "InfluxDB password")
-	argDbHost = flag.String("influxdb_host", "localhost:8086", "InfluxDB host:port")
-	argDbName = flag.String("influxdb_name", "k8s", "Influxdb database name")
+	argDbHost     = flag.String("influxdb_host", "localhost:8086", "InfluxDB host:port")
+	argDbName     = flag.String("influxdb_name", "k8s", "Influxdb database name")
 )
 
 type InfluxdbSource struct {
-	Poll_time      *time.Duration
-	client         *influxdb.Client
-	dbName         string
-	lastWrite      time.Time
-	kubeClient     *KubeClient
-	metrics		   []Metric
+	Poll_time  *time.Duration
+	client     *influxdb.Client
+	dbName     string
+	lastWrite  time.Time
+	kubeClient *KubeClient
+	metrics    []Metric
 }
 
 type Metric interface {
-	Execute(source *InfluxdbSource) (error)
+	Execute(source *InfluxdbSource) error
 }
 
 func toInt64(n interface{}) (int64, error) {
@@ -39,11 +41,11 @@ func toValue(points [][]interface{}) interface{} {
 	return points[0][2]
 }
 
-func max64(x,y int64) int64 {
+func max64(x, y int64) int64 {
 	return int64(math.Max(float64(x), float64(y)))
 }
 
-func (self *InfluxdbSource) CheckData() (error) {
+func (self *InfluxdbSource) CheckData() error {
 	for _, metric := range self.metrics {
 		err := metric.Execute(self)
 		if err != nil {
@@ -85,11 +87,11 @@ func NewInfluxdbSource(duration *time.Duration) (Source, error) {
 
 	// Create the database if it does not already exist. Ignore errors.
 	return &InfluxdbSource{
-		Poll_time:        duration,
-		client:         client,
-		dbName:         *argDbName,
-		lastWrite:      time.Now(),
-		kubeClient:     newKubeClient(transport),
-		metrics:		getMetrics(),
+		Poll_time:  duration,
+		client:     client,
+		dbName:     *argDbName,
+		lastWrite:  time.Now(),
+		kubeClient: newKubeClient(transport),
+		metrics:    getMetrics(),
 	}, nil
 }

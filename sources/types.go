@@ -3,12 +3,13 @@ package sources
 import (
 	"flag"
 
+	"encoding/json"
+	"fmt"
 	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
-	"encoding/json"
 	"strconv"
 	"time"
-	"fmt")
+)
 
 var (
 	argMaster         = flag.String("kubernetes_master", "https://localhost:8443", "Kubernetes master address")
@@ -21,10 +22,10 @@ var (
 
 	sourceType = flag.String("source", "k8s", "Source of metrics - direct EAP containers or influxdb")
 
-	eapSelector = flag.String("eap_selector", "name=eapPod", "EAP pod selector")
+	eapSelector              = flag.String("eap_selector", "name=eapPod", "EAP pod selector")
 	eapReplicationController = flag.String("eap_replication_controller", "eaprc", "EAP replication controller")
-	eapPodRate = flag.Int("eap_pod_rate", 1000, "EAP pod rate") // allowed requests per second
-	maxEapPods = flag.Int("max_eap_pods", 20, "Max EAP pod instances") // max EAP pod instances // TODO: set the right number
+	eapPodRate               = flag.Int("eap_pod_rate", 1000, "EAP pod rate")        // allowed requests per second
+	maxEapPods               = flag.Int("max_eap_pods", 20, "Max EAP pod instances") // max EAP pod instances // TODO: set the right number
 )
 
 // PodState is the state of a pod, used as either input (desired state) or output (current state)
@@ -41,7 +42,7 @@ type Pod struct {
 
 type Container interface {
 	GetName() string
-	CheckStats(kube *KubeSource) (error)
+	CheckStats(kube *KubeSource) error
 }
 
 type QueryEntry interface {
@@ -53,13 +54,13 @@ func newDmrContainer() *DmrContainer {
 }
 
 type Source interface {
-	CheckData() (error)
+	CheckData() error
 }
 
 func NewSource(d *time.Duration) (Source, error) {
 	if *sourceType == "k8s" {
 		return NewKubeSource(d)
-	} else if (*sourceType == "influxdb") {
+	} else if *sourceType == "influxdb" {
 		return NewInfluxdbSource(d)
 	} else {
 		return nil, fmt.Errorf("No such source type: %s", *sourceType)
@@ -78,7 +79,7 @@ type StringInt struct {
 // UnmarshalJSON implements the json.Unmarshaller interface.
 func (strint *StringInt) UnmarshalJSON(value []byte) error {
 	if value[0] == '"' {
-		arr := value[1:len(value)-1]
+		arr := value[1 : len(value)-1]
 		return json.Unmarshal(arr, &strint.Value)
 	}
 	return json.Unmarshal(value, &strint.Value)
