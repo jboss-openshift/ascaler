@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alesj/ascaler/sources"
+	"github.com/jboss-openshift/ascaler/sources"
 	"github.com/golang/glog"
 )
 
