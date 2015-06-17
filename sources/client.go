@@ -77,17 +77,26 @@ func createTransport() (*http.Transport, error) {
 }
 
 func createClient(transport *http.Transport) *kube_client.Client {
+	var bearerToken string;
+	if argBearerTokenFile != nil {
+		if _, err := os.Stat(*argBearerTokenFile); err == nil {
+			buf, _ := ioutil.ReadFile(*argBearerTokenFile)
+			bearerToken = string(buf)
+		}
+	}
 	if transport != nil {
 		return kube_client.NewOrDie(&kube_client.Config{
 			Host:      os.ExpandEnv(*argMaster),
 			Version:   *argMasterVersion,
 			Transport: transport,
+			BearerToken: bearerToken,
 		})
 	} else {
 		return kube_client.NewOrDie(&kube_client.Config{
 			Host:     os.ExpandEnv(*argMaster),
 			Version:  *argMasterVersion,
 			Insecure: *argMasterInsecure,
+			BearerToken: bearerToken,
 		})
 	}
 }

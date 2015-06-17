@@ -20,6 +20,8 @@ var (
 	keyFile  = flag.String("key", "/opt/openshift/origin/openshift.local.certificates/admin/key.key", "A PEM encoded private key file.")
 	caFile   = flag.String("CA", "/opt/openshift/origin/openshift.local.certificates/master/root.crt", "A PEM encoded CA's certificate file.")
 
+	argBearerTokenFile   = flag.String("token", "/var/run/secrets/kubernetes.io/serviceaccount/token", "A file containing the OAuth token for connecting to Kubernetes master.")
+
 	sourceType = flag.String("source", "k8s", "Source of metrics - direct EAP containers or influxdb")
 
 	eapSelector              = flag.String("eap_selector", "name=eapPod", "EAP pod selector")
