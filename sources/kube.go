@@ -59,7 +59,7 @@ func (self *KubeSource) getPods(selector string) ([]Pod, error) {
 		return nil, err
 	}
 
-	pods, err := self.client.Pods(kube_api.NamespaceAll).List(sc)
+	pods, err := self.client.Pods(*argNamespace).List(sc)
 	if err != nil {
 		return nil, err
 	}

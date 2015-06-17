@@ -24,6 +24,8 @@ var (
 
 	sourceType = flag.String("source", "k8s", "Source of metrics - direct EAP containers or influxdb")
 
+	argNamespace             = flag.String("namespace", kube_api.NamespaceAll, "The Kubernetes namespace in which to operate.")
+
 	eapSelector              = flag.String("eap_selector", "name=eapPod", "EAP pod selector")
 	eapReplicationController = flag.String("eap_replication_controller", "eaprc", "EAP replication controller")
 	eapPodRate               = flag.Int("eap_pod_rate", 1000, "EAP pod rate")        // allowed requests per second
