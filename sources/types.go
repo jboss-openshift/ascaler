@@ -13,7 +13,7 @@ import (
 
 var (
 	argMaster         = flag.String("kubernetes_master", "https://localhost:8443", "Kubernetes master address")
-	argMasterVersion  = flag.String("kubernetes_version", "v1beta2", "Kubernetes api version")
+	argMasterVersion  = flag.String("kubernetes_version", "v1", "Kubernetes api version")
 	argMasterInsecure = flag.Bool("kubernetes_insecure", false, "Trust Kubernetes master certificate (if using https)")
 
 	certFile = flag.String("cert", "/opt/openshift/origin/openshift.local.certificates/admin/cert.crt", "A PEM eoncoded certificate file.")
