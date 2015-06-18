@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
 )
 
 // RESTCreateStrategy defines the minimum validation, accepted input, and
@@ -33,16 +34,17 @@ type RESTCreateStrategy interface {
 
 	// NamespaceScoped returns true if the object must be within a namespace.
 	NamespaceScoped() bool
-	// ResetBeforeCreate is invoked on create before validation to remove any fields
-	// that may not be persisted.
-	ResetBeforeCreate(obj runtime.Object)
+	// PrepareForCreate is invoked on create before validation to normalize
+	// the object.  For example: remove fields that are not to be persisted,
+	// sort order-insensitive list fields, etc.
+	PrepareForCreate(obj runtime.Object)
 	// Validate is invoked after default fields in the object have been filled in before
 	// the object is persisted.
-	Validate(obj runtime.Object) errors.ValidationErrorList
+	Validate(ctx api.Context, obj runtime.Object) fielderrors.ValidationErrorList
 }
 
 // BeforeCreate ensures that common operations for all resources are performed on creation. It only returns
-// errors that can be converted to api.Status. It invokes ResetBeforeCreate, then GenerateName, then Validate.
+// errors that can be converted to api.Status. It invokes PrepareForCreate, then GenerateName, then Validate.
 // It returns nil if the object should be created.
 func BeforeCreate(strategy RESTCreateStrategy, ctx api.Context, obj runtime.Object) error {
 	objectMeta, kind, kerr := objectMetaAndKind(strategy, obj)
@@ -57,17 +59,17 @@ func BeforeCreate(strategy RESTCreateStrategy, ctx api.Context, obj runtime.Obje
 	} else {
 		objectMeta.Namespace = api.NamespaceNone
 	}
-	strategy.ResetBeforeCreate(obj)
+	strategy.PrepareForCreate(obj)
 	api.FillObjectMetaSystemFields(ctx, objectMeta)
 	api.GenerateName(strategy, objectMeta)
 
-	if errs := strategy.Validate(obj); len(errs) > 0 {
+	if errs := strategy.Validate(ctx, obj); len(errs) > 0 {
 		return errors.NewInvalid(kind, objectMeta.Name, errs)
 	}
 	return nil
 }
 
-// CheckGeneratedNameError checks whether an error that occured creating a resource is due
+// CheckGeneratedNameError checks whether an error that occurred creating a resource is due
 // to generation being unable to pick a valid name.
 func CheckGeneratedNameError(strategy RESTCreateStrategy, err error, obj runtime.Object) error {
 	if !errors.IsAlreadyExists(err) {
@@ -83,16 +85,16 @@ func CheckGeneratedNameError(strategy RESTCreateStrategy, err error, obj runtime
 		return err
 	}
 
-	return errors.NewTryAgainLater(kind, "POST")
+	return errors.NewServerTimeout(kind, "POST", 0)
 }
 
 // objectMetaAndKind retrieves kind and ObjectMeta from a runtime object, or returns an error.
-func objectMetaAndKind(strategy RESTCreateStrategy, obj runtime.Object) (*api.ObjectMeta, string, error) {
+func objectMetaAndKind(typer runtime.ObjectTyper, obj runtime.Object) (*api.ObjectMeta, string, error) {
 	objectMeta, err := api.ObjectMetaFor(obj)
 	if err != nil {
 		return nil, "", errors.NewInternalError(err)
 	}
-	_, kind, err := strategy.ObjectVersionAndKind(obj)
+	_, kind, err := typer.ObjectVersionAndKind(obj)
 	if err != nil {
 		return nil, "", errors.NewInternalError(err)
 	}

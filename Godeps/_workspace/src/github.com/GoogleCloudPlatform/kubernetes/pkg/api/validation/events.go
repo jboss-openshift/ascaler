@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,17 +18,19 @@ package validation
 
 import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	errs "github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	errs "github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
 )
 
 // ValidateEvent makes sure that the event makes sense.
 func ValidateEvent(event *api.Event) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
-	if event.Namespace != event.InvolvedObject.Namespace {
+	// TODO: There is no namespace required for minion
+	if event.InvolvedObject.Kind != "Node" &&
+		event.Namespace != event.InvolvedObject.Namespace {
 		allErrs = append(allErrs, errs.NewFieldInvalid("involvedObject.namespace", event.InvolvedObject.Namespace, "namespace does not match involvedObject"))
 	}
-	if !util.IsDNSSubdomain(event.Namespace) {
+	if !util.IsDNS1123Subdomain(event.Namespace) {
 		allErrs = append(allErrs, errs.NewFieldInvalid("namespace", event.Namespace, ""))
 	}
 	return allErrs

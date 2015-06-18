@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,8 +38,16 @@ func (fakeCodec) DecodeInto([]byte, runtime.Object) error {
 
 type fakeConvertor struct{}
 
+func (fakeConvertor) Convert(in, out interface{}) error {
+	return nil
+}
+
 func (fakeConvertor) ConvertToVersion(in runtime.Object, _ string) (runtime.Object, error) {
 	return in, nil
+}
+
+func (fakeConvertor) ConvertFieldLabel(version, kind, label, value string) (string, string, error) {
+	return label, value, nil
 }
 
 var validCodec = fakeCodec{}

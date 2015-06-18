@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ghodss/yaml"
@@ -63,6 +65,7 @@ var (
 		Contexts: map[string]clientcmdapi.Context{
 			"gothic-context": {AuthInfo: "blue-user", Cluster: "chicken-cluster", Namespace: "plane-ns"}},
 	}
+
 	testConfigConflictAlfa = clientcmdapi.Config{
 		AuthInfos: map[string]clientcmdapi.AuthInfo{
 			"red-user":    {Token: "a-different-red-token"},
@@ -74,11 +77,108 @@ var (
 	}
 )
 
+func TestNonExistentCommandLineFile(t *testing.T) {
+	loadingRules := ClientConfigLoadingRules{
+		ExplicitPath: "bogus_file",
+	}
+
+	_, err := loadingRules.Load()
+	if err == nil {
+		t.Fatalf("Expected error for missing command-line file, got none")
+	}
+	if !strings.Contains(err.Error(), "bogus_file") {
+		t.Fatalf("Expected error about 'bogus_file', got %s", err.Error())
+	}
+}
+
+func TestToleratingMissingFiles(t *testing.T) {
+	loadingRules := ClientConfigLoadingRules{
+		Precedence: []string{"bogus1", "bogus2", "bogus3"},
+	}
+
+	_, err := loadingRules.Load()
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+}
+
+func TestErrorReadingFile(t *testing.T) {
+	commandLineFile, _ := ioutil.TempFile("", "")
+	defer os.Remove(commandLineFile.Name())
+
+	if err := ioutil.WriteFile(commandLineFile.Name(), []byte("bogus value"), 0644); err != nil {
+		t.Fatalf("Error creating tempfile: %v", err)
+	}
+
+	loadingRules := ClientConfigLoadingRules{
+		ExplicitPath: commandLineFile.Name(),
+	}
+
+	_, err := loadingRules.Load()
+	if err == nil {
+		t.Fatalf("Expected error for unloadable file, got none")
+	}
+	if !strings.Contains(err.Error(), commandLineFile.Name()) {
+		t.Fatalf("Expected error about '%s', got %s", commandLineFile.Name(), err.Error())
+	}
+}
+
+func TestErrorReadingNonFile(t *testing.T) {
+	tmpdir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("Couldn't create tmpdir")
+	}
+	defer os.Remove(tmpdir)
+
+	loadingRules := ClientConfigLoadingRules{
+		ExplicitPath: tmpdir,
+	}
+
+	_, err = loadingRules.Load()
+	if err == nil {
+		t.Fatalf("Expected error for non-file, got none")
+	}
+	if !strings.Contains(err.Error(), tmpdir) {
+		t.Fatalf("Expected error about '%s', got %s", tmpdir, err.Error())
+	}
+}
+
+func TestConflictingCurrentContext(t *testing.T) {
+	commandLineFile, _ := ioutil.TempFile("", "")
+	defer os.Remove(commandLineFile.Name())
+	envVarFile, _ := ioutil.TempFile("", "")
+	defer os.Remove(envVarFile.Name())
+
+	mockCommandLineConfig := clientcmdapi.Config{
+		CurrentContext: "any-context-value",
+	}
+	mockEnvVarConfig := clientcmdapi.Config{
+		CurrentContext: "a-different-context",
+	}
+
+	WriteToFile(mockCommandLineConfig, commandLineFile.Name())
+	WriteToFile(mockEnvVarConfig, envVarFile.Name())
+
+	loadingRules := ClientConfigLoadingRules{
+		ExplicitPath: commandLineFile.Name(),
+		Precedence:   []string{envVarFile.Name()},
+	}
+
+	mergedConfig, err := loadingRules.Load()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if mergedConfig.CurrentContext != mockCommandLineConfig.CurrentContext {
+		t.Errorf("expected %v, got %v", mockCommandLineConfig.CurrentContext, mergedConfig.CurrentContext)
+	}
+}
+
 func TestResolveRelativePaths(t *testing.T) {
 	pathResolutionConfig1 := clientcmdapi.Config{
 		AuthInfos: map[string]clientcmdapi.AuthInfo{
-			"relative-user-1": {ClientCertificate: "relative/client/cert", ClientKey: "../relative/client/key", AuthPath: "../../relative/auth/path"},
-			"absolute-user-1": {ClientCertificate: "/absolute/client/cert", ClientKey: "/absolute/client/key", AuthPath: "/absolute/auth/path"},
+			"relative-user-1": {ClientCertificate: "relative/client/cert", ClientKey: "../relative/client/key"},
+			"absolute-user-1": {ClientCertificate: "/absolute/client/cert", ClientKey: "/absolute/client/key"},
 		},
 		Clusters: map[string]clientcmdapi.Cluster{
 			"relative-server-1": {CertificateAuthority: "../relative/ca"},
@@ -87,8 +187,8 @@ func TestResolveRelativePaths(t *testing.T) {
 	}
 	pathResolutionConfig2 := clientcmdapi.Config{
 		AuthInfos: map[string]clientcmdapi.AuthInfo{
-			"relative-user-2": {ClientCertificate: "relative/client/cert2", ClientKey: "../relative/client/key2", AuthPath: "../../relative/auth/path2"},
-			"absolute-user-2": {ClientCertificate: "/absolute/client/cert2", ClientKey: "/absolute/client/key2", AuthPath: "/absolute/auth/path2"},
+			"relative-user-2": {ClientCertificate: "relative/client/cert2", ClientKey: "../relative/client/key2"},
+			"absolute-user-2": {ClientCertificate: "/absolute/client/cert2", ClientKey: "/absolute/client/key2"},
 		},
 		Clusters: map[string]clientcmdapi.Cluster{
 			"relative-server-2": {CertificateAuthority: "../relative/ca2"},
@@ -110,8 +210,7 @@ func TestResolveRelativePaths(t *testing.T) {
 	WriteToFile(pathResolutionConfig2, configFile2)
 
 	loadingRules := ClientConfigLoadingRules{
-		CommandLinePath: configFile1,
-		EnvVarPath:      configFile2,
+		Precedence: []string{configFile1, configFile2},
 	}
 
 	mergedConfig, err := loadingRules.Load()
@@ -148,31 +247,153 @@ func TestResolveRelativePaths(t *testing.T) {
 			foundAuthInfoCount++
 			matchStringArg(path.Join(configDir1, pathResolutionConfig1.AuthInfos["relative-user-1"].ClientCertificate), authInfo.ClientCertificate, t)
 			matchStringArg(path.Join(configDir1, pathResolutionConfig1.AuthInfos["relative-user-1"].ClientKey), authInfo.ClientKey, t)
-			matchStringArg(path.Join(configDir1, pathResolutionConfig1.AuthInfos["relative-user-1"].AuthPath), authInfo.AuthPath, t)
 		}
 		if key == "relative-user-2" {
 			foundAuthInfoCount++
 			matchStringArg(path.Join(configDir2, pathResolutionConfig2.AuthInfos["relative-user-2"].ClientCertificate), authInfo.ClientCertificate, t)
 			matchStringArg(path.Join(configDir2, pathResolutionConfig2.AuthInfos["relative-user-2"].ClientKey), authInfo.ClientKey, t)
-			matchStringArg(path.Join(configDir2, pathResolutionConfig2.AuthInfos["relative-user-2"].AuthPath), authInfo.AuthPath, t)
 		}
 		if key == "absolute-user-1" {
 			foundAuthInfoCount++
 			matchStringArg(pathResolutionConfig1.AuthInfos["absolute-user-1"].ClientCertificate, authInfo.ClientCertificate, t)
 			matchStringArg(pathResolutionConfig1.AuthInfos["absolute-user-1"].ClientKey, authInfo.ClientKey, t)
-			matchStringArg(pathResolutionConfig1.AuthInfos["absolute-user-1"].AuthPath, authInfo.AuthPath, t)
 		}
 		if key == "absolute-user-2" {
 			foundAuthInfoCount++
 			matchStringArg(pathResolutionConfig2.AuthInfos["absolute-user-2"].ClientCertificate, authInfo.ClientCertificate, t)
 			matchStringArg(pathResolutionConfig2.AuthInfos["absolute-user-2"].ClientKey, authInfo.ClientKey, t)
-			matchStringArg(pathResolutionConfig2.AuthInfos["absolute-user-2"].AuthPath, authInfo.AuthPath, t)
 		}
 	}
 	if foundAuthInfoCount != 4 {
 		t.Errorf("Expected 4 users, found %v: %v", foundAuthInfoCount, mergedConfig.AuthInfos)
 	}
 
+}
+
+func TestMigratingFile(t *testing.T) {
+	sourceFile, _ := ioutil.TempFile("", "")
+	defer os.Remove(sourceFile.Name())
+	destinationFile, _ := ioutil.TempFile("", "")
+	// delete the file so that we'll write to it
+	os.Remove(destinationFile.Name())
+
+	WriteToFile(testConfigAlfa, sourceFile.Name())
+
+	loadingRules := ClientConfigLoadingRules{
+		MigrationRules: map[string]string{destinationFile.Name(): sourceFile.Name()},
+	}
+
+	if _, err := loadingRules.Load(); err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+
+	// the load should have recreated this file
+	defer os.Remove(destinationFile.Name())
+
+	sourceContent, err := ioutil.ReadFile(sourceFile.Name())
+	if err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+	destinationContent, err := ioutil.ReadFile(destinationFile.Name())
+	if err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+
+	if !reflect.DeepEqual(sourceContent, destinationContent) {
+		t.Errorf("source and destination do not match")
+	}
+}
+
+func TestMigratingFileLeaveExistingFileAlone(t *testing.T) {
+	sourceFile, _ := ioutil.TempFile("", "")
+	defer os.Remove(sourceFile.Name())
+	destinationFile, _ := ioutil.TempFile("", "")
+	defer os.Remove(destinationFile.Name())
+
+	WriteToFile(testConfigAlfa, sourceFile.Name())
+
+	loadingRules := ClientConfigLoadingRules{
+		MigrationRules: map[string]string{destinationFile.Name(): sourceFile.Name()},
+	}
+
+	if _, err := loadingRules.Load(); err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+
+	destinationContent, err := ioutil.ReadFile(destinationFile.Name())
+	if err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+
+	if len(destinationContent) > 0 {
+		t.Errorf("destination should not have been touched")
+	}
+}
+
+func TestMigratingFileSourceMissingSkip(t *testing.T) {
+	sourceFilename := "some-missing-file"
+	destinationFile, _ := ioutil.TempFile("", "")
+	// delete the file so that we'll write to it
+	os.Remove(destinationFile.Name())
+
+	loadingRules := ClientConfigLoadingRules{
+		MigrationRules: map[string]string{destinationFile.Name(): sourceFilename},
+	}
+
+	if _, err := loadingRules.Load(); err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+
+	if _, err := os.Stat(destinationFile.Name()); !os.IsNotExist(err) {
+		t.Errorf("destination should not exist")
+	}
+}
+
+func ExampleNoMergingOnExplicitPaths() {
+	commandLineFile, _ := ioutil.TempFile("", "")
+	defer os.Remove(commandLineFile.Name())
+	envVarFile, _ := ioutil.TempFile("", "")
+	defer os.Remove(envVarFile.Name())
+
+	WriteToFile(testConfigAlfa, commandLineFile.Name())
+	WriteToFile(testConfigConflictAlfa, envVarFile.Name())
+
+	loadingRules := ClientConfigLoadingRules{
+		ExplicitPath: commandLineFile.Name(),
+		Precedence:   []string{envVarFile.Name()},
+	}
+
+	mergedConfig, err := loadingRules.Load()
+
+	json, err := clientcmdlatest.Codec.Encode(mergedConfig)
+	if err != nil {
+		fmt.Printf("Unexpected error: %v", err)
+	}
+	output, err := yaml.JSONToYAML(json)
+	if err != nil {
+		fmt.Printf("Unexpected error: %v", err)
+	}
+
+	fmt.Printf("%v", string(output))
+	// Output:
+	// apiVersion: v1
+	// clusters:
+	// - cluster:
+	//     server: http://cow.org:8080
+	//   name: cow-cluster
+	// contexts:
+	// - context:
+	//     cluster: cow-cluster
+	//     namespace: hammer-ns
+	//     user: red-user
+	//   name: federal-context
+	// current-context: ""
+	// kind: Config
+	// preferences: {}
+	// users:
+	// - name: red-user
+	//   user:
+	//     token: red-token
 }
 
 func ExampleMergingSomeWithConflict() {
@@ -185,8 +406,7 @@ func ExampleMergingSomeWithConflict() {
 	WriteToFile(testConfigConflictAlfa, envVarFile.Name())
 
 	loadingRules := ClientConfigLoadingRules{
-		CommandLinePath: commandLineFile.Name(),
-		EnvVarPath:      envVarFile.Name(),
+		Precedence: []string{commandLineFile.Name(), envVarFile.Name()},
 	}
 
 	mergedConfig, err := loadingRules.Load()
@@ -245,10 +465,7 @@ func ExampleMergingEverythingNoConflicts() {
 	WriteToFile(testConfigDelta, homeDirFile.Name())
 
 	loadingRules := ClientConfigLoadingRules{
-		CommandLinePath:      commandLineFile.Name(),
-		EnvVarPath:           envVarFile.Name(),
-		CurrentDirectoryPath: currentDirFile.Name(),
-		HomeDirectoryPath:    homeDirFile.Name(),
+		Precedence: []string{commandLineFile.Name(), envVarFile.Name(), currentDirFile.Name(), homeDirFile.Name()},
 	}
 
 	mergedConfig, err := loadingRules.Load()

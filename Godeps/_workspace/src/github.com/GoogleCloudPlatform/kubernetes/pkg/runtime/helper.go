@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/conversion"
 )
 
+// IsListType returns true if the provided Object has a slice called Items
 func IsListType(obj Object) bool {
 	_, err := GetItemsPtr(obj)
 	return err == nil
@@ -57,6 +58,7 @@ func GetItemsPtr(list Object) (interface{}, error) {
 
 // ExtractList returns obj's Items element as an array of runtime.Objects.
 // Returns an error if obj is not a List type (does not have an Items member).
+// TODO: move me to pkg/api/meta
 func ExtractList(obj Object) ([]Object, error) {
 	itemsPtr, err := GetItemsPtr(obj)
 	if err != nil {
@@ -83,10 +85,14 @@ func ExtractList(obj Object) ([]Object, error) {
 	return list, nil
 }
 
+// objectSliceType is the type of a slice of Objects
+var objectSliceType = reflect.TypeOf([]Object{})
+
 // SetList sets the given list object's Items member have the elements given in
 // objects.
 // Returns an error if list is not a List type (does not have an Items member),
 // or if any of the objects are not of the right type.
+// TODO: move me to pkg/api/meta
 func SetList(list Object, objects []Object) error {
 	itemsPtr, err := GetItemsPtr(list)
 	if err != nil {
@@ -95,6 +101,10 @@ func SetList(list Object, objects []Object) error {
 	items, err := conversion.EnforcePtr(itemsPtr)
 	if err != nil {
 		return err
+	}
+	if items.Type() == objectSliceType {
+		items.Set(reflect.ValueOf(objects))
+		return nil
 	}
 	slice := reflect.MakeSlice(items.Type(), len(objects), len(objects))
 	for i := range objects {
@@ -137,4 +147,63 @@ func FieldPtr(v reflect.Value, fieldName string, dest interface{}) error {
 		return nil
 	}
 	return fmt.Errorf("couldn't assign/convert %v to %v", field.Type(), v.Type())
+}
+
+// DecodeList alters the list in place, attempting to decode any objects found in
+// the list that have the runtime.Unknown type. Any errors that occur are returned
+// after the entire list is processed. Decoders are tried in order.
+func DecodeList(objects []Object, decoders ...ObjectDecoder) []error {
+	errs := []error(nil)
+	for i, obj := range objects {
+		switch t := obj.(type) {
+		case *Unknown:
+			for _, decoder := range decoders {
+				if !decoder.Recognizes(t.APIVersion, t.Kind) {
+					continue
+				}
+				obj, err := decoder.Decode(t.RawJSON)
+				if err != nil {
+					errs = append(errs, err)
+					break
+				}
+				objects[i] = obj
+				break
+			}
+		}
+	}
+	return errs
+}
+
+// MultiObjectTyper returns the types of objects across multiple schemes in order.
+type MultiObjectTyper []ObjectTyper
+
+var _ ObjectTyper = MultiObjectTyper{}
+
+func (m MultiObjectTyper) DataVersionAndKind(data []byte) (version, kind string, err error) {
+	for _, t := range m {
+		version, kind, err = t.DataVersionAndKind(data)
+		if err == nil {
+			return
+		}
+	}
+	return
+}
+
+func (m MultiObjectTyper) ObjectVersionAndKind(obj Object) (version, kind string, err error) {
+	for _, t := range m {
+		version, kind, err = t.ObjectVersionAndKind(obj)
+		if err == nil {
+			return
+		}
+	}
+	return
+}
+
+func (m MultiObjectTyper) Recognizes(version, kind string) bool {
+	for _, t := range m {
+		if t.Recognizes(version, kind) {
+			return true
+		}
+	}
+	return false
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -104,6 +104,8 @@ func TestPoller_sync(t *testing.T) {
 }
 
 func TestPoller_Run(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer func() { stopCh <- struct{}{} }()
 	s := NewStore(testPairKeyFunc)
 	const count = 10
 	var called = 0
@@ -118,7 +120,7 @@ func TestPoller_Run(t *testing.T) {
 			return testEnumerator{}, nil
 		}
 		return nil, errors.New("transient error")
-	}, time.Millisecond, s).Run()
+	}, time.Millisecond, s).RunUntil(stopCh)
 
 	// The test here is that we get called at least count times.
 	<-done

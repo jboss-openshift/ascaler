@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,4 +24,16 @@ import (
 // object or input data is not registered.
 func IsNotRegisteredError(err error) bool {
 	return conversion.IsNotRegisteredError(err)
+}
+
+// IsMissingKind returns true if the error indicates that the provided object
+// is missing a 'Kind' field.
+func IsMissingKind(err error) bool {
+	return conversion.IsMissingKind(err)
+}
+
+// IsMissingVersion returns true if the error indicates that the provided object
+// is missing a 'Versioj' field.
+func IsMissingVersion(err error) bool {
+	return conversion.IsMissingVersion(err)
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 func TestResourceHelpers(t *testing.T) {
 	cpuLimit := resource.MustParse("10")
 	memoryLimit := resource.MustParse("10G")
-	resourceSpec := ResourceRequirementSpec{
+	resourceSpec := ResourceRequirements{
 		Limits: ResourceList{
 			"cpu":             cpuLimit,
 			"memory":          memoryLimit,
@@ -38,7 +38,7 @@ func TestResourceHelpers(t *testing.T) {
 	if res := resourceSpec.Limits.Memory(); *res != memoryLimit {
 		t.Errorf("expected memorylimit %d, got %d", memoryLimit, res)
 	}
-	resourceSpec = ResourceRequirementSpec{
+	resourceSpec = ResourceRequirements{
 		Limits: ResourceList{
 			"memory":          memoryLimit,
 			"kube.io/storage": memoryLimit,

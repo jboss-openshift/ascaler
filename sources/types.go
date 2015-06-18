@@ -72,8 +72,8 @@ func NewSource(d *time.Duration) (Source, error) {
 }
 
 type Environment interface {
-	GetHost(pod *kube_api.Pod, port kube_api.Port) string
-	GetPort(pod *kube_api.Pod, port kube_api.Port) int
+	GetHost(pod *kube_api.Pod, port kube_api.ContainerPort) string
+	GetPort(pod *kube_api.Pod, port kube_api.ContainerPort) int
 }
 
 type StringInt struct {

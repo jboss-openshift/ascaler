@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,7 +21,9 @@ import (
 	"testing"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	_ "github.com/GoogleCloudPlatform/kubernetes/pkg/api/v1beta3"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 
 	"github.com/google/gofuzz"
 )
@@ -131,6 +133,22 @@ func TestExtractListOfValuePtrs(t *testing.T) {
 	}
 }
 
+func TestDecodeList(t *testing.T) {
+	pl := &api.List{
+		Items: []runtime.Object{
+			&api.Pod{ObjectMeta: api.ObjectMeta{Name: "1"}},
+			&runtime.Unknown{TypeMeta: runtime.TypeMeta{Kind: "Pod", APIVersion: "v1beta3"}, RawJSON: []byte(`{"kind":"Pod","apiVersion":"v1beta3","metadata":{"name":"test"}}`)},
+			&runtime.Unstructured{TypeMeta: runtime.TypeMeta{Kind: "Foo", APIVersion: "Bar"}, Object: map[string]interface{}{"test": "value"}},
+		},
+	}
+	if errs := runtime.DecodeList(pl.Items, api.Scheme); len(errs) != 0 {
+		t.Fatalf("unexpected error %v", errs)
+	}
+	if pod, ok := pl.Items[1].(*api.Pod); !ok || pod.Name != "test" {
+		t.Errorf("object not converted: %#v", pl.Items[1])
+	}
+}
+
 func TestSetList(t *testing.T) {
 	pl := &api.PodList{}
 	list := []runtime.Object{
@@ -148,6 +166,27 @@ func TestSetList(t *testing.T) {
 	for i := range list {
 		if e, a := list[i].(*api.Pod).Name, pl.Items[i].Name; e != a {
 			t.Fatalf("Expected %v, got %v", e, a)
+		}
+	}
+}
+
+func TestSetListToRuntimeObjectArray(t *testing.T) {
+	pl := &api.List{}
+	list := []runtime.Object{
+		&api.Pod{ObjectMeta: api.ObjectMeta{Name: "1"}},
+		&api.Pod{ObjectMeta: api.ObjectMeta{Name: "2"}},
+		&api.Pod{ObjectMeta: api.ObjectMeta{Name: "3"}},
+	}
+	err := runtime.SetList(pl, list)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	if e, a := len(list), len(pl.Items); e != a {
+		t.Fatalf("Expected %v, got %v", e, a)
+	}
+	for i := range list {
+		if e, a := list[i], pl.Items[i]; e != a {
+			t.Fatalf("%d: unmatched: %s", i, util.ObjectDiff(e, a))
 		}
 	}
 }

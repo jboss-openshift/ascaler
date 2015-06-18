@@ -27,21 +27,21 @@ func isJube() bool {
 type Jube struct {
 }
 
-func (self *Jube) GetHost(pod *kube_api.Pod, port kube_api.Port) string {
-	return pod.Status.Host
+func (self *Jube) GetHost(pod *kube_api.Pod, port kube_api.ContainerPort) string {
+	return pod.Status.HostIP
 }
 
-func (self *Jube) GetPort(pod *kube_api.Pod, port kube_api.Port) int {
+func (self *Jube) GetPort(pod *kube_api.Pod, port kube_api.ContainerPort) int {
 	return port.HostPort
 }
 
 type Kubernetes struct {
 }
 
-func (self *Kubernetes) GetHost(pod *kube_api.Pod, port kube_api.Port) string {
+func (self *Kubernetes) GetHost(pod *kube_api.Pod, port kube_api.ContainerPort) string {
 	return pod.Status.PodIP
 }
 
-func (self *Kubernetes) GetPort(pod *kube_api.Pod, port kube_api.Port) int {
+func (self *Kubernetes) GetPort(pod *kube_api.Pod, port kube_api.ContainerPort) int {
 	return port.ContainerPort
 }

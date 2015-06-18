@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/v1beta3"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	"github.com/davecgh/go-spew/spew"
 
 	flag "github.com/spf13/pflag"
 )
@@ -52,20 +53,22 @@ func fuzzInternalObject(t *testing.T, forVersion string, item runtime.Object, se
 }
 
 func roundTrip(t *testing.T, codec runtime.Codec, item runtime.Object) {
+	printer := spew.ConfigState{DisableMethods: true}
+
 	name := reflect.TypeOf(item).Elem().Name()
 	data, err := codec.Encode(item)
 	if err != nil {
-		t.Errorf("%v: %v (%#v)", name, err, item)
+		t.Errorf("%v: %v (%s)", name, err, printer.Sprintf("%#v", item))
 		return
 	}
 
 	obj2, err := codec.Decode(data)
 	if err != nil {
-		t.Errorf("0: %v: %v\nCodec: %v\nData: %s\nSource: %#v", name, err, codec, string(data), item)
+		t.Errorf("0: %v: %v\nCodec: %v\nData: %s\nSource: %#v", name, err, codec, string(data), printer.Sprintf("%#v", item))
 		return
 	}
 	if !api.Semantic.DeepEqual(item, obj2) {
-		t.Errorf("1: %v: diff: %v\nCodec: %v\nData: %s\nSource: %#v\nFinal: %#v", name, util.ObjectGoPrintDiff(item, obj2), codec, string(data), item, obj2)
+		t.Errorf("1: %v: diff: %v\nCodec: %v\nData: %s\nSource: %#v\nFinal: %#v", name, util.ObjectGoPrintDiff(item, obj2), codec, string(data), printer.Sprintf("%#v", item), printer.Sprintf("%#v", obj2))
 		return
 	}
 
@@ -82,13 +85,20 @@ func roundTrip(t *testing.T, codec runtime.Codec, item runtime.Object) {
 }
 
 // roundTripSame verifies the same source object is tested in all API versions.
-func roundTripSame(t *testing.T, item runtime.Object) {
+func roundTripSame(t *testing.T, item runtime.Object, except ...string) {
+	set := util.NewStringSet(except...)
 	seed := rand.Int63()
 	fuzzInternalObject(t, "", item, seed)
-	roundTrip(t, v1beta1.Codec, item)
-	roundTrip(t, v1beta2.Codec, item)
-	fuzzInternalObject(t, "v1beta3", item, seed)
-	roundTrip(t, v1beta3.Codec, item)
+	if !set.Has("v1beta1") {
+		roundTrip(t, v1beta1.Codec, item)
+	}
+	if !set.Has("v1beta2") {
+		roundTrip(t, v1beta2.Codec, item)
+	}
+	if !set.Has("v1beta3") {
+		fuzzInternalObject(t, "v1beta3", item, seed)
+		roundTrip(t, v1beta3.Codec, item)
+	}
 }
 
 func roundTripAll(t *testing.T, item runtime.Object) {
@@ -126,7 +136,11 @@ func TestList(t *testing.T) {
 }
 
 var nonRoundTrippableTypes = util.NewStringSet("ContainerManifest", "ContainerManifestList")
-var nonInternalRoundTrippableTypes = util.NewStringSet("List")
+var nonInternalRoundTrippableTypes = util.NewStringSet("List", "ListOptions", "PodExecOptions")
+var nonRoundTrippableTypesByVersion = map[string][]string{
+	"PodTemplate":     {"v1beta1", "v1beta2"},
+	"PodTemplateList": {"v1beta1", "v1beta2"},
+}
 
 func TestRoundTripTypes(t *testing.T) {
 	// api.Scheme.Log(t)
@@ -145,7 +159,7 @@ func TestRoundTripTypes(t *testing.T) {
 			if _, err := meta.TypeAccessor(item); err != nil {
 				t.Fatalf("%q is not a TypeMeta and cannot be tested - add it to nonRoundTrippableTypes: %v", kind, err)
 			}
-			roundTripSame(t, item)
+			roundTripSame(t, item, nonRoundTrippableTypesByVersion[kind]...)
 			if !nonInternalRoundTrippableTypes.Has(kind) {
 				roundTrip(t, api.Codec, fuzzInternalObject(t, "", item, rand.Int63()))
 			}
@@ -159,7 +173,7 @@ func TestEncode_Ptr(t *testing.T) {
 			Labels: map[string]string{"name": "foo"},
 		},
 		Spec: api.PodSpec{
-			RestartPolicy: api.RestartPolicy{Always: &api.RestartPolicyAlways{}},
+			RestartPolicy: api.RestartPolicyAlways,
 			DNSPolicy:     api.DNSClusterFirst,
 		},
 	}

@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Google Inc. All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,15 +30,19 @@ import (
 
 func New() HTTPProber {
 	transport := &http.Transport{}
-	return HTTPProber{transport}
+	return httpProber{transport}
 }
 
-type HTTPProber struct {
+type HTTPProber interface {
+	Probe(host string, port int, path string, timeout time.Duration) (probe.Result, error)
+}
+
+type httpProber struct {
 	transport *http.Transport
 }
 
 // Probe returns a ProbeRunner capable of running an http check.
-func (pr *HTTPProber) Probe(host string, port int, path string, timeout time.Duration) (probe.Result, error) {
+func (pr httpProber) Probe(host string, port int, path string, timeout time.Duration) (probe.Result, error) {
 	return DoHTTPProbe(formatURL(host, port, path), &http.Client{Timeout: timeout, Transport: pr.transport})
 }
 

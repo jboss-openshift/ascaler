@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,65 +18,30 @@ package rest
 
 import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/validation"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
 )
 
-// rcStrategy implements behavior for Replication Controllers.
-// TODO: move to a replicationcontroller specific package.
-type rcStrategy struct {
-	runtime.ObjectTyper
-	api.NameGenerator
-}
+// ObjectFunc is a function to act on a given object. An error may be returned
+// if the hook cannot be completed. An ObjectFunc may transform the provided
+// object.
+type ObjectFunc func(obj runtime.Object) error
 
-// ReplicationControllers is the default logic that applies when creating and updating Replication Controller
-// objects.
-var ReplicationControllers RESTCreateStrategy = rcStrategy{api.Scheme, api.SimpleNameGenerator}
-
-// NamespaceScoped is true for replication controllers.
-func (rcStrategy) NamespaceScoped() bool {
-	return true
-}
-
-// ResetBeforeCreate clears fields that are not allowed to be set by end users on creation.
-func (rcStrategy) ResetBeforeCreate(obj runtime.Object) {
-	controller := obj.(*api.ReplicationController)
-	controller.Status = api.ReplicationControllerStatus{}
-}
-
-// Validate validates a new replication controller.
-func (rcStrategy) Validate(obj runtime.Object) errors.ValidationErrorList {
-	controller := obj.(*api.ReplicationController)
-	return validation.ValidateReplicationController(controller)
-}
-
-// podStrategy implements behavior for Pods
-// TODO: move to a pod specific package.
-type podStrategy struct {
-	runtime.ObjectTyper
-	api.NameGenerator
-}
-
-// Pods is the default logic that applies when creating and updating Pod
-// objects.
-var Pods RESTCreateStrategy = podStrategy{api.Scheme, api.SimpleNameGenerator}
-
-// NamespaceScoped is true for pods.
-func (podStrategy) NamespaceScoped() bool {
-	return true
-}
-
-// ResetBeforeCreate clears fields that are not allowed to be set by end users on creation.
-func (podStrategy) ResetBeforeCreate(obj runtime.Object) {
-	pod := obj.(*api.Pod)
-	pod.Status = api.PodStatus{}
-}
-
-// Validate validates a new pod.
-func (podStrategy) Validate(obj runtime.Object) errors.ValidationErrorList {
-	pod := obj.(*api.Pod)
-	return validation.ValidatePod(pod)
+// AllFuncs returns an ObjectFunc that attempts to run all of the provided functions
+// in order, returning early if there are any errors.
+func AllFuncs(fns ...ObjectFunc) ObjectFunc {
+	return func(obj runtime.Object) error {
+		for _, fn := range fns {
+			if fn == nil {
+				continue
+			}
+			if err := fn(obj); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 // svcStrategy implements behavior for Services
@@ -88,49 +53,37 @@ type svcStrategy struct {
 
 // Services is the default logic that applies when creating and updating Service
 // objects.
-var Services RESTCreateStrategy = svcStrategy{api.Scheme, api.SimpleNameGenerator}
+var Services = svcStrategy{api.Scheme, api.SimpleNameGenerator}
 
 // NamespaceScoped is true for services.
 func (svcStrategy) NamespaceScoped() bool {
 	return true
 }
 
-// ResetBeforeCreate clears fields that are not allowed to be set by end users on creation.
-func (svcStrategy) ResetBeforeCreate(obj runtime.Object) {
+// PrepareForCreate clears fields that are not allowed to be set by end users on creation.
+func (svcStrategy) PrepareForCreate(obj runtime.Object) {
 	service := obj.(*api.Service)
 	service.Status = api.ServiceStatus{}
 }
 
+// PrepareForUpdate clears fields that are not allowed to be set by end users on update.
+func (svcStrategy) PrepareForUpdate(obj, old runtime.Object) {
+	// TODO: once service has a status sub-resource we can enable this.
+	//newService := obj.(*api.Service)
+	//oldService := old.(*api.Service)
+	//newService.Status = oldService.Status
+}
+
 // Validate validates a new service.
-func (svcStrategy) Validate(obj runtime.Object) errors.ValidationErrorList {
+func (svcStrategy) Validate(ctx api.Context, obj runtime.Object) fielderrors.ValidationErrorList {
 	service := obj.(*api.Service)
 	return validation.ValidateService(service)
 }
 
-// nodeStrategy implements behavior for nodes
-// TODO: move to a node specific package.
-type nodeStrategy struct {
-	runtime.ObjectTyper
-	api.NameGenerator
+func (svcStrategy) AllowCreateOnUpdate() bool {
+	return true
 }
 
-// Nodes is the default logic that applies when creating and updating Node
-// objects.
-var Nodes RESTCreateStrategy = nodeStrategy{api.Scheme, api.SimpleNameGenerator}
-
-// NamespaceScoped is false for services.
-func (nodeStrategy) NamespaceScoped() bool {
-	return false
-}
-
-// ResetBeforeCreate clears fields that are not allowed to be set by end users on creation.
-func (nodeStrategy) ResetBeforeCreate(obj runtime.Object) {
-	_ = obj.(*api.Node)
-	// Nodes allow *all* fields, including status, to be set.
-}
-
-// Validate validates a new node.
-func (nodeStrategy) Validate(obj runtime.Object) errors.ValidationErrorList {
-	node := obj.(*api.Node)
-	return validation.ValidateMinion(node)
+func (svcStrategy) ValidateUpdate(ctx api.Context, obj, old runtime.Object) fielderrors.ValidationErrorList {
+	return validation.ValidateServiceUpdate(old.(*api.Service), obj.(*api.Service))
 }

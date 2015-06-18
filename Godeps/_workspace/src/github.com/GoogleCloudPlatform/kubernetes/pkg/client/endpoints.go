@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@ limitations under the License.
 package client
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 )
@@ -35,8 +35,9 @@ type EndpointsInterface interface {
 	Create(endpoints *api.Endpoints) (*api.Endpoints, error)
 	List(selector labels.Selector) (*api.EndpointsList, error)
 	Get(name string) (*api.Endpoints, error)
+	Delete(name string) error
 	Update(endpoints *api.Endpoints) (*api.Endpoints, error)
-	Watch(label, field labels.Selector, resourceVersion string) (watch.Interface, error)
+	Watch(label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error)
 }
 
 // endpoints implements EndpointsInterface
@@ -60,30 +61,36 @@ func (c *endpoints) Create(endpoints *api.Endpoints) (*api.Endpoints, error) {
 // List takes a selector, and returns the list of endpoints that match that selector
 func (c *endpoints) List(selector labels.Selector) (result *api.EndpointsList, err error) {
 	result = &api.EndpointsList{}
-	err = c.r.Get().Namespace(c.ns).Resource("endpoints").SelectorParam("labels", selector).Do().Into(result)
+	err = c.r.Get().
+		Namespace(c.ns).
+		Resource("endpoints").
+		LabelsSelectorParam(selector).
+		Do().
+		Into(result)
 	return
 }
 
 // Get returns information about the endpoints for a particular service.
 func (c *endpoints) Get(name string) (result *api.Endpoints, err error) {
-	if len(name) == 0 {
-		return nil, errors.New("name is required parameter to Get")
-	}
-
 	result = &api.Endpoints{}
 	err = c.r.Get().Namespace(c.ns).Resource("endpoints").Name(name).Do().Into(result)
 	return
 }
 
+// Delete takes the name of the endpoint, and returns an error if one occurs
+func (c *endpoints) Delete(name string) error {
+	return c.r.Delete().Namespace(c.ns).Resource("endpoints").Name(name).Do().Error()
+}
+
 // Watch returns a watch.Interface that watches the requested endpoints for a service.
-func (c *endpoints) Watch(label, field labels.Selector, resourceVersion string) (watch.Interface, error) {
+func (c *endpoints) Watch(label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
 	return c.r.Get().
 		Prefix("watch").
 		Namespace(c.ns).
 		Resource("endpoints").
 		Param("resourceVersion", resourceVersion).
-		SelectorParam("labels", label).
-		SelectorParam("fields", field).
+		LabelsSelectorParam(label).
+		FieldsSelectorParam(field).
 		Watch()
 }
 

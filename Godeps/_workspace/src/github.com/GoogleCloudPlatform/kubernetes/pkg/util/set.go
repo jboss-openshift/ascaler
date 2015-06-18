@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ limitations under the License.
 package util
 
 import (
+	"reflect"
 	"sort"
 )
 
@@ -30,6 +31,18 @@ func NewStringSet(items ...string) StringSet {
 	ss := StringSet{}
 	ss.Insert(items...)
 	return ss
+}
+
+// KeySet creates a StringSet from a keys of a map[string](? extends interface{}).  Since you can't describe that map type in the Go type system
+// the reflected value is required.
+func KeySet(theMap reflect.Value) StringSet {
+	ret := StringSet{}
+
+	for _, keyValue := range theMap.MapKeys() {
+		ret.Insert(keyValue.String())
+	}
+
+	return ret
 }
 
 // Insert adds items to the set.
@@ -62,6 +75,50 @@ func (s StringSet) HasAll(items ...string) bool {
 	return true
 }
 
+// HasAny returns true if any items are contained in the set.
+func (s StringSet) HasAny(items ...string) bool {
+	for _, item := range items {
+		if s.Has(item) {
+			return true
+		}
+	}
+	return false
+}
+
+// Difference returns a set of objects that are not in s2
+// For example:
+// s1 = {1, 2, 3}
+// s2 = {1, 2, 4, 5}
+// s1.Difference(s2) = {3}
+// s2.Difference(s1) = {4, 5}
+func (s StringSet) Difference(s2 StringSet) StringSet {
+	result := NewStringSet()
+	for key := range s {
+		if !s2.Has(key) {
+			result.Insert(key)
+		}
+	}
+	return result
+}
+
+// Union returns a new set which includes items in either s1 or s2.
+// vof objects that are not in s2
+// For example:
+// s1 = {1, 2}
+// s2 = {3, 4}
+// s1.Union(s2) = {1, 2, 3, 4}
+// s2.Union(s1) = {1, 2, 3, 4}
+func (s1 StringSet) Union(s2 StringSet) StringSet {
+	result := NewStringSet()
+	for key := range s1 {
+		result.Insert(key)
+	}
+	for key := range s2 {
+		result.Insert(key)
+	}
+	return result
+}
+
 // IsSuperset returns true iff s1 is a superset of s2.
 func (s1 StringSet) IsSuperset(s2 StringSet) bool {
 	for item := range s2 {
@@ -80,6 +137,15 @@ func (s StringSet) List() []string {
 	}
 	sort.StringSlice(res).Sort()
 	return res
+}
+
+// Returns a single element from the set.
+func (s StringSet) PopAny() (string, bool) {
+	for key := range s {
+		s.Delete(key)
+		return key, true
+	}
+	return "", false
 }
 
 // Len returns the size of the set.

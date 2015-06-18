@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2014 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -86,8 +86,51 @@ func doTestStore(t *testing.T, store Store) {
 	}
 }
 
+// Test public interface
+func doTestIndex(t *testing.T, indexer Indexer) {
+	mkObj := func(id string, val string) testStoreObject {
+		return testStoreObject{id: id, val: val}
+	}
+
+	// Test Index
+	expected := map[string]util.StringSet{}
+	expected["b"] = util.NewStringSet("a", "c")
+	expected["f"] = util.NewStringSet("e")
+	expected["h"] = util.NewStringSet("g")
+	indexer.Add(mkObj("a", "b"))
+	indexer.Add(mkObj("c", "b"))
+	indexer.Add(mkObj("e", "f"))
+	indexer.Add(mkObj("g", "h"))
+	{
+		for k, v := range expected {
+			found := util.StringSet{}
+			indexResults, err := indexer.Index("by_val", mkObj("", k))
+			if err != nil {
+				t.Errorf("Unexpected error %v", err)
+			}
+			for _, item := range indexResults {
+				found.Insert(item.(testStoreObject).id)
+			}
+			items := v.List()
+			if !found.HasAll(items...) {
+				t.Errorf("missing items, index %s, expected %v but found %v", k, items, found.List())
+			}
+		}
+	}
+}
+
 func testStoreKeyFunc(obj interface{}) (string, error) {
 	return obj.(testStoreObject).id, nil
+}
+
+func testStoreIndexFunc(obj interface{}) (string, error) {
+	return obj.(testStoreObject).val, nil
+}
+
+func testStoreIndexers() Indexers {
+	indexers := Indexers{}
+	indexers["by_val"] = testStoreIndexFunc
+	return indexers
 }
 
 type testStoreObject struct {
@@ -106,4 +149,8 @@ func TestFIFOCache(t *testing.T) {
 func TestUndeltaStore(t *testing.T) {
 	nop := func([]interface{}) {}
 	doTestStore(t, NewUndeltaStore(nop, testStoreKeyFunc))
+}
+
+func TestIndex(t *testing.T) {
+	doTestIndex(t, NewIndexer(testStoreKeyFunc, testStoreIndexers()))
 }
