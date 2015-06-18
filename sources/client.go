@@ -19,7 +19,7 @@ func (self *KubeClient) Pods(namespace string) kube_client.PodInterface {
 }
 
 func (self *KubeClient) GetReplicas(name string) (int, error) {
-	rc, err := self.client.ReplicationControllers(kube_api.NamespaceAll).Get(name)
+	rc, err := self.client.ReplicationControllers(*argNamespace).Get(name)
 	if err != nil {
 		return 0, err
 	}
@@ -28,14 +28,14 @@ func (self *KubeClient) GetReplicas(name string) (int, error) {
 }
 
 func (self *KubeClient) SetReplicas(name string, replicas int) error {
-	rc, err := self.client.ReplicationControllers(kube_api.NamespaceAll).Get(name)
+	rc, err := self.client.ReplicationControllers(*argNamespace).Get(name)
 	if err != nil {
 		return err
 	}
 
 	rc.Spec.Replicas = replicas
 
-	_, err = self.client.ReplicationControllers(kube_api.NamespaceAll).Update(rc)
+	_, err = self.client.ReplicationControllers(*argNamespace).Update(rc)
 	if err != nil {
 		return err
 	}
