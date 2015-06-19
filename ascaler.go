@@ -37,7 +37,7 @@ func doWork() error {
 		case <-ticker.C:
 			err := source.CheckData()
 			if err != nil {
-				glog.Error(err)
+				glog.Errorf("Error while getting data: %#v", err)
 			}
 		}
 	}
