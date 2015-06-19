@@ -3,7 +3,6 @@ package sources
 import (
 	"crypto/tls"
 	"crypto/x509"
-	kube_api "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	kube_client "github.com/GoogleCloudPlatform/kubernetes/pkg/client"
 	"io/ioutil"
 	"net/http"
