@@ -1,0 +1,24 @@
+{
+  "kind": "Pod",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "ascaler-pod",
+    "namespace": "gsd"
+  },
+  "spec": {
+    "containers": [
+      {
+        "name": "ascaler-container",
+        "image": "docker.io/luksa/ascaler",
+        "command": [
+          "/opt/ascaler/ascaler",
+          "-kubernetes_master",
+          "https://kubernetes.default.svc.cluster.local:443",
+          "-kubernetes_insecure",
+          "-namespace",
+          "gsd"
+        ]
+      }
+    ]
+  }
+}
