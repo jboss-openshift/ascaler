@@ -49,6 +49,11 @@ func (self *KubeSource) parsePod(pod *kube_api.Pod) *Pod {
 			}
 		}
 	}
+
+	if len(localPod.Containers) == 0 {
+		glog.Warningf("No matching containers found ('mgmt' port name or 9990 container port) for pod %s", pod.Name)
+	}
+
 	glog.V(2).Infof("found pod: %+v", localPod)
 
 	return &localPod
