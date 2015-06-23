@@ -84,6 +84,11 @@ func (self *KubeSource) CheckData() error {
 			return err
 		}
 
+		if len(pods) == 0 {
+			glog.Warningf("No pods found for selector %s", selector)
+			continue
+		}
+
 		for _, pod := range pods {
 			for _, container := range pod.Containers {
 				glog.Infof("Container --> %s", container.GetName())
