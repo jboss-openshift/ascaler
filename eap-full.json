@@ -1,0 +1,94 @@
+{
+  "kind": "List",
+  "apiVersion": "v1",
+  "items": [
+    {
+      "kind": "Pod",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "ascaler-pod",
+        "namespace": "summit-eap-autoscaling-demo"
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "ascaler-container",
+            "image": "docker.io/luksa/ascaler",
+            "command": [
+              "/opt/ascaler/ascaler",
+              "-kubernetes_master",
+              "https://kubernetes.default.svc.cluster.local",
+              "-kubernetes_insecure",
+              "-namespace",
+              "summit-eap-autoscaling-demo",
+              "-eap_selector",
+              "component=eap",
+              "-eap_pod_rate",
+              "10",
+              "-eap_replication_controller",
+              "eap-replication-controller"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "ReplicationController",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "eap-replication-controller",
+        "namespace": "summit-eap-autoscaling-demo"
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "component": "eap"
+        },
+        "template": {
+          "metadata": {
+            "name": "ascaler-pod",
+            "namespace": "summit-eap-autoscaling-demo",
+            "labels": {
+              "component": "eap"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "eap-container",
+                "image": "docker.io/alesj/gsd",
+                "lifecycle": {
+                  "preStop": {
+                    "exec": {
+                      "command": [
+                        "/opt/eap/bin/prestop-exec"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "eap-service",
+        "namespace": "summit-eap-autoscaling-demo"
+      },
+      "spec": {
+        "ports": [
+          {
+            "port": 8080
+          }
+        ],
+        "selector": {
+          "component": "eap"
+        }
+      }
+    }
+  ]
+}
