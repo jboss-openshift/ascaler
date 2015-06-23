@@ -65,7 +65,13 @@
                       ]
                     }
                   }
-                }
+                },
+                "ports": [
+                  {
+                    "name": "mgmt",
+                    "containerPort": 9990
+                  }
+                ]
               }
             ]
           }
