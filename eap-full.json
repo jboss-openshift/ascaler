@@ -24,7 +24,7 @@
               "-eap_selector",
               "component=eap",
               "-eap_pod_rate",
-              "10",
+              "3",
               "-eap_replication_controller",
               "eap-replication-controller"
             ]
